@@ -11,19 +11,19 @@ const Footer: React.FC = () => {
           </div>
           <div className="flex space-x-6">
             <Link href="/terms">
-              <a className="text-sm text-gray-500 hover:text-gray-900">
+              <div className="text-sm text-gray-500 hover:text-gray-900 cursor-pointer">
                 Terms
-              </a>
+              </div>
             </Link>
             <Link href="/privacy">
-              <a className="text-sm text-gray-500 hover:text-gray-900">
+              <div className="text-sm text-gray-500 hover:text-gray-900 cursor-pointer">
                 Privacy
-              </a>
+              </div>
             </Link>
             <Link href="/help">
-              <a className="text-sm text-gray-500 hover:text-gray-900">
+              <div className="text-sm text-gray-500 hover:text-gray-900 cursor-pointer">
                 Help
-              </a>
+              </div>
             </Link>
           </div>
         </div>

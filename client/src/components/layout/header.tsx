@@ -1,22 +1,73 @@
-import React, { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { Link } from "wouter";
+import React, { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   toggleMobileSidebar: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
-  const { user, logoutMutation } = useAuth();
+interface User {
+  id: number;
+  username: string;
+  email: string;
+}
 
-  const handleLogout = () => {
-    logoutMutation.mutate();
+const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [_, navigate] = useLocation();
+  const { toast } = useToast();
+
+  // Fetch user data
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const response = await fetch('/api/user', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+    }
+    
+    fetchUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Logged out",
+          description: "You have been successfully logged out",
+          variant: "default",
+        });
+        
+        // Redirect to login page
+        navigate('/auth');
+      }
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: "Failed to log out. Please try again.",
+        variant: "destructive",
+      });
+      console.error('Error during logout:', error);
+    }
   };
 
   // Get user initials for avatar
@@ -37,10 +88,10 @@ const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
         <div className="flex items-center">
           <div className="flex-shrink-0 flex items-center">
             <Link href="/">
-              <a className="flex items-center">
+              <div className="flex items-center cursor-pointer">
                 <i className="ri-file-transfer-line text-primary text-2xl mr-2"></i>
                 <span className="text-xl font-bold text-gray-900">PDFtoXML</span>
-              </a>
+              </div>
             </Link>
           </div>
         </div>
@@ -54,17 +105,17 @@ const Header: React.FC<HeaderProps> = ({ toggleMobileSidebar }) => {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
-                <Link href="/settings">
-                  <a className="w-full">Your Profile</a>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/settings">
-                  <a className="w-full">Settings</a>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleLogout}>
+              <Link href="/settings">
+                <DropdownMenuItem className="cursor-pointer">
+                  Your Profile
+                </DropdownMenuItem>
+              </Link>
+              <Link href="/settings">
+                <DropdownMenuItem className="cursor-pointer">
+                  Settings
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
