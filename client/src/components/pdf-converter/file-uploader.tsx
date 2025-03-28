@@ -20,26 +20,45 @@ const FileUploader: React.FC<FileUploaderProps> = ({
 
   const uploadMutation = useMutation<Conversion, Error, File>({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      
-      const response = await fetch("/api/conversions", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to convert file");
+      try {
+        console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        const response = await fetch("/api/conversions", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        
+        if (!response.ok) {
+          console.error(`Upload failed with status: ${response.status}`);
+          let errorMessage = "Failed to convert file";
+          
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            console.error("Could not parse error response:", e);
+          }
+          
+          throw new Error(errorMessage);
+        }
+        
+        console.log("Upload successful, parsing response...");
+        return await response.json();
+      } catch (err) {
+        console.error("Error in upload mutation:", err);
+        throw err;
       }
-      
-      return await response.json();
     },
     onSuccess: (data) => {
+      console.log("Conversion completed successfully:", data);
       onConversionComplete(data);
     },
     onError: (error) => {
+      console.error("Conversion error:", error);
       toast({
         title: "Conversion failed",
         description: error.message,

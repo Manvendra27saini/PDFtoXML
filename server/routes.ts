@@ -56,9 +56,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "processing",
         });
 
-        // Process PDF conversion asynchronously
         try {
+          console.log("Starting PDF conversion process");
+          
+          // Process PDF conversion asynchronously
           const { xml, metadata } = await convertPdfToXml(file.buffer);
+          console.log("Conversion completed successfully");
           
           // Update conversion with results
           const updatedConversion = await storage.updateConversion(conversion.id, {
@@ -68,21 +71,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: metadata,
           });
 
-          res.status(200).json(updatedConversion);
+          return res.status(200).json(updatedConversion);
         } catch (error) {
+          console.error("Conversion error:", error);
+          
           // Update conversion with error status
           await storage.updateConversion(conversion.id, {
             status: "failed",
             metadata: { error: (error as Error).message },
           });
 
-          res.status(500).json({ 
+          return res.status(500).json({ 
             message: "Conversion failed", 
             error: (error as Error).message 
           });
         }
       } catch (error) {
-        res.status(500).json({ 
+        console.error("Server error:", error);
+        return res.status(500).json({ 
           message: "Server error", 
           error: (error as Error).message 
         });
