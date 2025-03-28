@@ -1,8 +1,18 @@
 import { users, type User, type InsertUser, conversions, type Conversion, type InsertConversion, type UpdateConversion } from "@shared/schema";
 import createMemoryStore from "memorystore";
 import session from "express-session";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { eq, and, desc } from 'drizzle-orm';
+import postgres from 'postgres';
+import connectPg from "connect-pg-simple";
 
-const MemoryStore = createMemoryStore(session);
+// PostgreSQL session store
+const PostgresSessionStore = connectPg(session);
+
+// Create a connection pool
+const connectionString = process.env.DATABASE_URL!;
+const client = postgres(connectionString);
+const db = drizzle(client);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -19,6 +29,75 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
+export class DatabaseStorage implements IStorage {
+  public sessionStore: session.Store;
+
+  constructor() {
+    // Initialize PostgreSQL session store
+    this.sessionStore = new PostgresSessionStore({
+      conObject: {
+        connectionString: process.env.DATABASE_URL!,
+      },
+      createTableIfMissing: true,
+    });
+  }
+
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
+  }
+
+  async createConversion(insertConversion: InsertConversion): Promise<Conversion> {
+    const result = await db.insert(conversions).values(insertConversion).returning();
+    return result[0];
+  }
+
+  async getConversion(id: number): Promise<Conversion | undefined> {
+    const result = await db.select().from(conversions).where(eq(conversions.id, id)).limit(1);
+    return result[0];
+  }
+
+  async updateConversion(id: number, data: UpdateConversion): Promise<Conversion | undefined> {
+    const result = await db.update(conversions)
+      .set(data)
+      .where(eq(conversions.id, id))
+      .returning();
+      
+    return result[0];
+  }
+
+  async getUserConversions(userId: number): Promise<Conversion[]> {
+    return db.select()
+      .from(conversions)
+      .where(eq(conversions.userId, userId))
+      .orderBy(desc(conversions.createdAt));
+  }
+
+  async deleteConversion(id: number): Promise<boolean> {
+    const result = await db.delete(conversions)
+      .where(eq(conversions.id, id))
+      .returning();
+      
+    return result.length > 0;
+  }
+}
+
+// Memory storage implementation (for backwards compatibility)
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private conversions: Map<number, Conversion>;
@@ -104,4 +183,5 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Use the database storage implementation
+export const storage = new DatabaseStorage();
