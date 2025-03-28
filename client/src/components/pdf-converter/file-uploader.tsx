@@ -4,6 +4,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { Conversion } from "@shared/schema";
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import { Progress } from "@/components/ui/progress";
+import { Upload, FileUp } from "lucide-react";
+import { formatFileSize } from "@/lib/utils";
 
 interface FileUploaderProps {
   onConversionStart: () => void;
@@ -15,6 +18,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   onConversionComplete 
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -22,32 +27,57 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     mutationFn: async (file: File) => {
       try {
         console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+        setSelectedFile(file);
         
         const formData = new FormData();
         formData.append("file", file);
         
-        const response = await fetch("/api/conversions", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
+        // Create an XMLHttpRequest to track upload progress
+        return await new Promise<Conversion>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          
+          // Track upload progress
+          xhr.upload.addEventListener("progress", (event) => {
+            if (event.lengthComputable) {
+              const percentComplete = Math.round((event.loaded / event.total) * 100);
+              setUploadProgress(percentComplete);
+              console.log(`Upload progress: ${percentComplete}%`);
+            }
+          });
+          
+          // Handle success
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data);
+              } catch (error) {
+                reject(new Error("Error parsing response"));
+              }
+            } else {
+              try {
+                const errorData = JSON.parse(xhr.responseText);
+                reject(new Error(errorData.message || "Upload failed"));
+              } catch {
+                reject(new Error(`Upload failed with status ${xhr.status}`));
+              }
+            }
+          });
+          
+          // Handle errors
+          xhr.addEventListener("error", () => {
+            reject(new Error("Network error occurred"));
+          });
+          
+          xhr.addEventListener("abort", () => {
+            reject(new Error("Upload aborted"));
+          });
+          
+          // Open and send the request
+          xhr.open("POST", "/api/conversions", true);
+          xhr.withCredentials = true;
+          xhr.send(formData);
         });
-        
-        if (!response.ok) {
-          console.error(`Upload failed with status: ${response.status}`);
-          let errorMessage = "Failed to convert file";
-          
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error("Could not parse error response:", e);
-          }
-          
-          throw new Error(errorMessage);
-        }
-        
-        console.log("Upload successful, parsing response...");
-        return await response.json();
       } catch (err) {
         console.error("Error in upload mutation:", err);
         throw err;
@@ -55,7 +85,13 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     },
     onSuccess: (data) => {
       console.log("Conversion completed successfully:", data);
+      setUploadProgress(100);
       onConversionComplete(data);
+      // Reset file after successful upload
+      setTimeout(() => {
+        setSelectedFile(null);
+        setUploadProgress(0);
+      }, 1000);
     },
     onError: (error) => {
       console.error("Conversion error:", error);
@@ -64,6 +100,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         description: error.message,
         variant: "destructive",
       });
+      setUploadProgress(0);
+      setSelectedFile(null);
     },
   });
 
@@ -127,42 +165,65 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     // Notify parent about conversion start
     onConversionStart();
     
+    // Set initial progress
+    setUploadProgress(0);
+    
     // Upload file
     uploadMutation.mutate(file);
   };
 
   const handleBrowseClick = () => {
-    fileInputRef.current?.click();
+    if (!uploadMutation.isPending) {
+      fileInputRef.current?.click();
+    }
   };
 
   return (
     <div className="mt-6">
       <div 
-        className={`drag-area border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition cursor-pointer ${isDragging ? 'active' : ''}`}
+        className={`drag-area border-2 border-dashed rounded-lg p-8 text-center transition 
+          ${isDragging ? 'border-primary bg-blue-50' : 'border-gray-300 hover:bg-gray-50'} 
+          ${uploadMutation.isPending ? 'cursor-default' : 'cursor-pointer'}`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={handleBrowseClick}
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {uploadMutation.isPending ? (
-            <LoadingSpinner size="large" className="mx-auto border-b-2 border-l-2 border-r-2" />
+            <div className="flex flex-col items-center">
+              <LoadingSpinner size="large" className="mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Uploading {selectedFile?.name}
+              </h3>
+              <div className="w-full max-w-md mx-auto mb-2">
+                <Progress value={uploadProgress} className="h-2" />
+              </div>
+              <p className="text-sm text-gray-500">
+                {uploadProgress}% • {formatFileSize(selectedFile?.size || 0)}
+              </p>
+            </div>
           ) : (
-            <i className="ri-upload-cloud-2-line text-5xl text-gray-400"></i>
-          )}
-          <h3 className="text-lg font-medium text-gray-900">
-            {uploadMutation.isPending 
-              ? "Uploading your file..."
-              : "Drag and drop your PDF file here"}
-          </h3>
-          {!uploadMutation.isPending && (
             <>
+              <div className="bg-blue-50 rounded-full p-3 mx-auto w-16 h-16 flex items-center justify-center">
+                <Upload className="h-8 w-8 text-primary" />
+              </div>
+              
+              <h3 className="text-xl font-medium text-gray-900">
+                Drag and drop your PDF file here
+              </h3>
+              
               <p className="text-sm text-gray-500">or</p>
+              
               <div>
-                <label htmlFor="fileInput" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer">
+                <button 
+                  type="button"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <FileUp className="h-4 w-4 mr-2" />
                   Browse files
-                </label>
+                </button>
                 <input 
                   id="fileInput" 
                   ref={fileInputRef}
@@ -173,9 +234,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({
                   disabled={uploadMutation.isPending}
                 />
               </div>
+              
+              <p className="text-xs text-gray-500">
+                Supports PDF files up to 20MB
+              </p>
             </>
           )}
-          <p className="text-xs text-gray-500 mt-2">Maximum file size: 20MB</p>
         </div>
       </div>
     </div>
