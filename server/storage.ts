@@ -1,6 +1,7 @@
 import { users, type User, type InsertUser, conversions, type Conversion, type InsertConversion, type UpdateConversion } from "@shared/schema";
-import createMemoryStore from "memorystore";
 import session from "express-session";
+import memorystore from "memorystore";
+const MemoryStore = memorystore(session);
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, and, desc } from 'drizzle-orm';
 import postgres from 'postgres';
