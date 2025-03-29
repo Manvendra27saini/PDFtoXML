@@ -1,6 +1,6 @@
 import { Route, Redirect } from "wouter";
 import LoadingSpinner from "@/components/ui/loading-spinner";
-import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 type ComponentType = React.ComponentType<any> | (() => React.ReactNode);
 
@@ -11,32 +11,11 @@ export function ProtectedRoute({
   path: string;
   component: ComponentType;
 }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    // Check if user is authenticated
-    async function checkAuth() {
-      try {
-        const response = await fetch('/api/user', {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-        setIsAuthenticated(false);
-      }
-    }
-    
-    checkAuth();
-  }, []);
+  // Use the useAuth hook to get authentication state and user data
+  const { user, isLoading } = useAuth();
 
   // Show loading while checking auth
-  if (isAuthenticated === null) {
+  if (isLoading) {
     return (
       <Route path={path}>
         <div className="flex items-center justify-center min-h-screen">
@@ -47,7 +26,7 @@ export function ProtectedRoute({
   }
 
   // Redirect if not authenticated
-  if (!isAuthenticated) {
+  if (!user) {
     return (
       <Route path={path}>
         <Redirect to="/auth" />
