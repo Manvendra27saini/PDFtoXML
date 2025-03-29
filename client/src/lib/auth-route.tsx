@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Route, Redirect } from "wouter";
 import { Loader2 } from "lucide-react";
 
-export function ProtectedRoute({
+export function AuthRoute({
   path,
   component: Component,
 }: {
