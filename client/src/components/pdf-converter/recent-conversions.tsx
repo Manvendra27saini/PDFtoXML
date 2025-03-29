@@ -147,11 +147,9 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
 
       {conversions.length > 3 && (
         <div className="mt-4 text-center">
-          <Link href="/history">
-            <a className="inline-flex items-center px-4 py-2 text-sm font-medium text-primary hover:text-blue-700">
-              View all conversions
-              <i className="ri-arrow-right-line ml-1"></i>
-            </a>
+          <Link href="/history" className="inline-flex items-center px-4 py-2 text-sm font-medium text-primary hover:text-blue-700">
+            View all conversions
+            <i className="ri-arrow-right-line ml-1"></i>
           </Link>
         </div>
       )}

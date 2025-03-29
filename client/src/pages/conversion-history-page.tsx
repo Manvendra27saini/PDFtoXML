@@ -24,6 +24,26 @@ const ConversionHistoryPage: React.FC = () => {
   // Fetch user's conversions
   const { data: conversions = [], isLoading } = useQuery<Conversion[]>({
     queryKey: ["/api/conversions"],
+    queryFn: async ({ queryKey }) => {
+      try {
+        const res = await fetch(queryKey[0] as string, {
+          credentials: "include",
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401) {
+            console.log("Not authenticated, returning empty array");
+            return [];
+          }
+          throw new Error(`API error: ${res.status}`);
+        }
+        
+        return await res.json();
+      } catch (error) {
+        console.error("Error fetching conversions:", error);
+        return [];
+      }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -75,7 +95,7 @@ const ConversionHistoryPage: React.FC = () => {
             <CardContent className="p-6 text-center">
               <i className="ri-file-list-3-line text-4xl text-gray-400 mb-2"></i>
               <p className="text-gray-600">You haven't converted any files yet</p>
-              <Button className="mt-4" onClick={() => window.location.href = '/convert'}>
+              <Button className="mt-4" onClick={() => window.location.href = '/'}>
                 Convert a PDF file
               </Button>
             </CardContent>

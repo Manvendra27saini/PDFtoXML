@@ -9,7 +9,7 @@ import { Upload, FileUp } from "lucide-react";
 import { formatFileSize } from "@/lib/utils";
 
 interface FileUploaderProps {
-  onConversionStart: () => void;
+  onConversionStart: (fileName?: string) => void;
   onConversionComplete: (conversion: Conversion) => void;
 }
 
@@ -163,7 +163,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     }
 
     // Notify parent about conversion start
-    onConversionStart();
+    onConversionStart(file.name);
     
     // Set initial progress
     setUploadProgress(0);

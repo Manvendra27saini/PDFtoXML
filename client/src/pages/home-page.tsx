@@ -22,9 +22,32 @@ const HomePage: React.FC = () => {
   // Fetch user's conversions
   const { data: conversions = [], isLoading } = useQuery<Conversion[]>({
     queryKey: ["/api/conversions"],
+    queryFn: async ({ queryKey }) => {
+      try {
+        const res = await fetch(queryKey[0] as string, {
+          credentials: "include",
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401) {
+            console.log("Not authenticated, returning empty array");
+            return [];
+          }
+          throw new Error(`API error: ${res.status}`);
+        }
+        
+        return await res.json();
+      } catch (error) {
+        console.error("Error fetching conversions:", error);
+        return [];
+      }
+    },
   });
 
-  const handleConversionStart = () => {
+  const handleConversionStart = (fileName?: string) => {
+    if (fileName) {
+      setCurrentFile(fileName);
+    }
     setConversionStage(ConversionStage.PROCESSING);
   };
 
