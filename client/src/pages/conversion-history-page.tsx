@@ -16,10 +16,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const ConversionHistoryPage: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversionToDelete, setConversionToDelete] = useState<number | null>(null);
 
   // Fetch user's conversions
   const { data: conversions = [], isLoading } = useQuery<Conversion[]>({
@@ -67,10 +79,17 @@ const ConversionHistoryPage: React.FC = () => {
     },
   });
 
-  const handleDelete = (id: number) => {
-    if (confirm("Are you sure you want to delete this conversion?")) {
-      deleteMutation.mutate(id);
+  const handleDeleteClick = (id: number) => {
+    setConversionToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (conversionToDelete !== null) {
+      deleteMutation.mutate(conversionToDelete);
+      setConversionToDelete(null);
     }
+    setDeleteDialogOpen(false);
   };
 
   const handleDownload = (id: number) => {
@@ -159,7 +178,7 @@ const ConversionHistoryPage: React.FC = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handleDelete(conversion.id)}
+                            onClick={() => handleDeleteClick(conversion.id)}
                             disabled={deleteMutation.isPending}
                           >
                             <i className="ri-delete-bin-line mr-1"></i>
@@ -174,6 +193,27 @@ const ConversionHistoryPage: React.FC = () => {
           </Card>
         )}
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the conversion from your history. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              {deleteMutation.isPending ? (
+                <LoadingSpinner size="small" className="mr-2" />
+              ) : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

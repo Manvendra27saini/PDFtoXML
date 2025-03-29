@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +8,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatDate } from "@/lib/utils";
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface RecentConversionsProps {
   conversions: Conversion[];
@@ -20,6 +30,8 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [conversionToDelete, setConversionToDelete] = useState<number | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -42,10 +54,17 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
     },
   });
 
-  const handleDelete = (id: number) => {
-    if (confirm("Are you sure you want to delete this conversion?")) {
-      deleteMutation.mutate(id);
+  const handleDeleteClick = (id: number) => {
+    setConversionToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (conversionToDelete !== null) {
+      deleteMutation.mutate(conversionToDelete);
+      setConversionToDelete(null);
     }
+    setDeleteDialogOpen(false);
   };
 
   const handleDownload = (id: number) => {
@@ -79,7 +98,7 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
         </div>
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {conversions.slice(0, 3).map((conversion) => (
+          {conversions.map((conversion) => (
             <Card key={conversion.id} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex justify-between items-start">
@@ -133,7 +152,7 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => handleDelete(conversion.id)}
+                    onClick={() => handleDeleteClick(conversion.id)}
                     disabled={deleteMutation.isPending}
                   >
                     <i className="ri-delete-bin-line mr-1"></i>
@@ -145,14 +164,35 @@ const RecentConversions: React.FC<RecentConversionsProps> = ({
         </div>
       )}
 
-      {conversions.length > 3 && (
+      {conversions.length > 6 && (
         <div className="mt-4 text-center">
           <Link href="/history" className="inline-flex items-center px-4 py-2 text-sm font-medium text-primary hover:text-blue-700">
-            View all conversions
+            View in table format
             <i className="ri-arrow-right-line ml-1"></i>
           </Link>
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the conversion from your library. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              {deleteMutation.isPending ? (
+                <LoadingSpinner size="small" className="mr-2" />
+              ) : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
