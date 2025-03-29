@@ -3,29 +3,65 @@ import * as xmlbuilder from "xmlbuilder";
 // Simple PDF parser that returns text content and metadata
 // This is a mock implementation for development until pdf-parse is properly set up
 async function simplePdfParse(pdfBuffer: Buffer): Promise<any> {
-  // For testing purposes, extract text from the buffer
-  // In a real implementation, this would use a proper PDF parsing library
-  const textDecoder = new TextDecoder('utf-8');
-  const bufferText = textDecoder.decode(pdfBuffer);
-  
-  // Extract content between PDF markers or use sample content if not found
-  const pdfContent = bufferText.includes('%PDF') 
-    ? bufferText 
-    : 'Sample PDF content for testing purposes.\n\nThis is a paragraph.\n\nThis is another paragraph with some sample content.';
-  
-  // Create a simple object that mimics the pdf-parse return structure
-  return {
-    text: pdfContent,
-    numPages: Math.max(1, Math.ceil(pdfContent.length / 1000)), // Rough estimate of page count
-    info: {
-      Title: 'Sample Document',
-      Author: 'PDF Converter',
-      Creator: 'PDF Creation Software',
-      Producer: 'PDF Converter System',
-      CreationDate: new Date().toISOString()
-    },
-    version: '1.4'
-  };
+  try {
+    // We shouldn't try to directly decode PDF binary data as UTF-8 text
+    // Instead, let's use a simplified approach for development
+    
+    // Check if it's likely a PDF (starts with %PDF)
+    const isPDF = pdfBuffer.slice(0, 4).toString('ascii').startsWith('%PDF');
+    
+    // For development, we'll provide a generic text representation
+    // In production, a proper PDF parser library would be used
+    const sampleText = `This is extracted text from a PDF document.
+    
+    The document contains multiple paragraphs with various formatting.
+    
+    Some paragraphs may be headers or titles.
+    
+    • This is a bullet point in a list
+    • This is another bullet point
+    • And a third bullet point
+    
+    1. This is a numbered list item
+    2. This is the second numbered item
+    3. This is the third numbered item
+    
+    Sometimes the document may contain tables:
+    | Column 1 | Column 2 | Column 3 |
+    | Data 1-1 | Data 1-2 | Data 1-3 |
+    | Data 2-1 | Data 2-2 | Data 2-3 |
+    
+    The document may also reference images or figures.`;
+    
+    // Create a simple object that mimics the pdf-parse return structure
+    return {
+      text: sampleText,
+      numPages: Math.max(1, Math.ceil(pdfBuffer.length / 50000)), // Rough estimate of page count
+      info: {
+        Title: isPDF ? 'PDF Document' : 'Sample Document',
+        Author: 'PDF Converter',
+        Creator: 'PDF Creation Software',
+        Producer: 'PDF Converter System',
+        CreationDate: new Date().toISOString()
+      },
+      version: '1.4'
+    };
+  } catch (error) {
+    console.error('Error in simplePdfParse:', error);
+    // Provide fallback content in case of errors
+    return {
+      text: 'Sample PDF content for testing.',
+      numPages: 1,
+      info: {
+        Title: 'Sample Document',
+        Author: 'Unknown',
+        Creator: 'Unknown',
+        Producer: 'Unknown',
+        CreationDate: new Date().toISOString()
+      },
+      version: '1.0'
+    };
+  }
 }
 
 interface ConversionMetadata {
