@@ -4,7 +4,31 @@ import { Express } from "express";
 import session from "express-session";
 import { storage, UserType } from "./storage";
 import { z } from "zod";
-import { User, IUser, UserModel } from "./models";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+
+// Promisify scrypt function
+const scryptAsync = promisify(scrypt);
+
+// Hash password function
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+// Compare passwords function
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
+  try {
+    const [hashed, salt] = stored.split(".");
+    const hashedBuf = Buffer.from(hashed, "hex");
+    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+    return timingSafeEqual(hashedBuf, suppliedBuf);
+  } catch (error) {
+    console.error('Error comparing passwords:', error);
+    return false;
+  }
+}
 
 declare global {
   namespace Express {
@@ -39,9 +63,9 @@ export function setupAuth(app: Express) {
           return done(null, false);
         }
         
-        // Find the MongoDB user to use the comparePassword method
-        const mongoUser = await User.findOne({ email });
-        if (!mongoUser || !(await mongoUser.comparePassword(password))) {
+        // Verify password using the comparePasswords function
+        const isValid = await comparePasswords(password, user.password);
+        if (!isValid) {
           return done(null, false);
         }
         
@@ -86,8 +110,8 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already taken" });
       }
 
-      // Hash password using User model's static method
-      const hashedPassword = await (User as UserModel).hashPassword(validatedData.password);
+      // Hash password using our hashPassword function
+      const hashedPassword = await hashPassword(validatedData.password);
 
       // Create user with hashed password
       const user = await storage.createUser({

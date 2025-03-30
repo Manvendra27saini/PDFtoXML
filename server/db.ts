@@ -1,17 +1,25 @@
-import mongoose from 'mongoose';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { users, conversions } from '@shared/schema';
 
-// MongoDB connection URI
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pdf-converter';
+// Use the DATABASE_URL environment variable
+const DATABASE_URL = process.env.DATABASE_URL;
 
-// Connect to MongoDB
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB successfully');
-  })
-  .catch((error) => {
-    console.error('Error connecting to MongoDB:', error);
-    throw new Error('Failed to connect to MongoDB');
-  });
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL environment variable is not set');
+  throw new Error('DATABASE_URL environment variable is not set');
+}
 
-// Export the mongoose connection
-export const db = mongoose.connection;
+// Create postgres client
+const queryClient = postgres(DATABASE_URL, { max: 1 });
+
+// Create drizzle client
+export const db = drizzle(queryClient, { schema: { users, conversions } });
+
+console.log('Connected to PostgreSQL database');
+
+// Export the tables for convenience
+export const tables = {
+  users,
+  conversions
+};
