@@ -29,8 +29,8 @@ The PDF-to-XML Converter is a sophisticated web application that allows users to
 ### Backend
 - Node.js
 - Express.js
-- PostgreSQL database
-- Drizzle ORM
+- MongoDB database
+- Mongoose ODM
 - Passport.js for authentication
 - Multer for file uploads
 - pdf-parse for PDF processing
@@ -38,13 +38,13 @@ The PDF-to-XML Converter is a sophisticated web application that allows users to
 ### Development Tools
 - ESBuild
 - TypeScript
-- Drizzle Kit (for database migrations)
+- MongoDB Atlas (for cloud database)
 
 ## Installation & Local Setup
 
 ### Prerequisites
 - Node.js (v18.x or higher)
-- PostgreSQL database
+- MongoDB (local or MongoDB Atlas account)
 
 ### Steps to Run Locally
 
@@ -62,13 +62,15 @@ npm install
 3. Set up environment variables
 Create a `.env` file in the root directory with the following variables:
 ```
-DATABASE_URL=postgresql://username:password@localhost:5432/pdfconverter
+MONGODB_URI=mongodb://localhost:27017/pdfconverter
+# Or for MongoDB Atlas
+# MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/pdfconverter
 SESSION_SECRET=your_session_secret_here
 ```
 
-4. Run database migrations
+4. Initialize the database
 ```sh
-npm run db:push
+npm run init-db
 ```
 
 5. Start the development server
@@ -139,17 +141,17 @@ The application will be available at `http://localhost:5000`
 │   ├── db.ts              # Database connection
 │   ├── routes.ts          # API routes
 │   ├── storage.ts         # Data storage interface
+│   ├── models/            # MongoDB schema models
 │   └── index.ts           # Server entry point
 ├── shared/                # Shared code between client and server
-│   └── schema.ts          # Database schema and types
-├── migrations/            # Database migrations
+│   └── types.ts           # Type definitions
 └── package.json           # Project dependencies and scripts
 ```
 
 ## Troubleshooting & Common Issues
 
 ### Connection Issues
-- **Database Connection Error**: Ensure PostgreSQL is running and your DATABASE_URL is correct
+- **Database Connection Error**: Ensure MongoDB is running or your MongoDB Atlas connection string is correct
 - **CORS Errors**: The application is configured to run on localhost:5000; ensure no other services use this port
 
 ### Conversion Issues
