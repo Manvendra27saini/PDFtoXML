@@ -1,9 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { storage } from "./storage";
+import { storage, InsertConversionType } from "./storage";
 import { z } from "zod";
-import { insertConversionSchema, updateConversionSchema } from "@shared/schema";
 import multer from "multer";
 import { convertPdfToXml } from "./converter";
 
@@ -54,6 +53,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           originalFilename: file.originalname,
           originalSize: file.size,
           status: "processing",
+          convertedSize: null,
+          xmlContent: null,
         });
 
         try {
@@ -113,8 +114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get specific conversion
   app.get("/api/conversions/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
+      const id = req.params.id;
+      if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 
@@ -140,8 +141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete conversion
   app.delete("/api/conversions/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
+      const id = req.params.id;
+      if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 
@@ -172,8 +173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Download XML content
   app.get("/api/conversions/:id/download", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
+      const id = req.params.id;
+      if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 

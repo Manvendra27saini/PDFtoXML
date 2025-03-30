@@ -2,32 +2,14 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
-import { promisify } from "util";
-import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import { storage, UserType } from "./storage";
 import { z } from "zod";
-import { insertUserSchema } from "@shared/schema";
+import { User, IUser, UserModel } from "./models";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends UserType {}
   }
-}
-
-const scryptAsync = promisify(scrypt);
-
-async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${buf.toString("hex")}.${salt}`;
-}
-
-async function comparePasswords(supplied: string, stored: string) {
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
 export function setupAuth(app: Express) {
@@ -53,11 +35,17 @@ export function setupAuth(app: Express) {
     }, async (email, password, done) => {
       try {
         const user = await storage.getUserByEmail(email);
-        if (!user || !(await comparePasswords(password, user.password))) {
+        if (!user) {
           return done(null, false);
-        } else {
-          return done(null, user);
         }
+        
+        // Find the MongoDB user to use the comparePassword method
+        const mongoUser = await User.findOne({ email });
+        if (!mongoUser || !(await mongoUser.comparePassword(password))) {
+          return done(null, false);
+        }
+        
+        return done(null, user);
       } catch (err) {
         return done(err);
       }
@@ -65,7 +53,7 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
-  passport.deserializeUser(async (id: number, done) => {
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
       done(null, user);
@@ -78,7 +66,7 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       // Validate registration data
-      const registerSchema = insertUserSchema.extend({
+      const registerSchema = z.object({
         email: z.string().email("Invalid email format"),
         username: z.string().min(3, "Username must be at least 3 characters"),
         password: z.string().min(6, "Password must be at least 6 characters"),
@@ -98,15 +86,21 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already taken" });
       }
 
+      // Hash password using User model's static method
+      const hashedPassword = await (User as UserModel).hashPassword(validatedData.password);
+
       // Create user with hashed password
       const user = await storage.createUser({
         ...validatedData,
-        password: await hashPassword(validatedData.password),
+        password: hashedPassword,
       });
 
-      // Remove password from response
-      const userResponse = { ...user };
-      delete userResponse.password;
+      // Create response object without password
+      const userResponse = {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      };
 
       // Log user in
       req.login(user, (err) => {
@@ -123,16 +117,19 @@ export function setupAuth(app: Express) {
 
   // Login endpoint
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    passport.authenticate("local", (err: Error, user: UserType | false, info: any) => {
       if (err) return next(err);
       if (!user) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
       req.login(user, (err) => {
         if (err) return next(err);
-        // Remove password from response
-        const userResponse = { ...user };
-        delete userResponse.password;
+        // Create clean response object without password
+        const userResponse = {
+          id: user.id,
+          username: user.username,
+          email: user.email
+        };
         res.status(200).json(userResponse);
       });
     })(req, res, next);
@@ -149,9 +146,13 @@ export function setupAuth(app: Express) {
   // Get current user endpoint
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    // Remove password from response
-    const user = { ...req.user };
-    delete user.password;
-    res.json(user);
+    // Create clean response object without password
+    const user = req.user as UserType;
+    const userResponse = {
+      id: user.id,
+      username: user.username,
+      email: user.email
+    };
+    res.json(userResponse);
   });
 }
