@@ -115,7 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversions/:id", isAuthenticated, async (req, res) => {
     try {
       const id = req.params.id;
-      if (!id || !id.match(/^\d+$/)) {
+      if (!id) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 
@@ -142,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/conversions/:id", isAuthenticated, async (req, res) => {
     try {
       const id = req.params.id;
-      if (!id || !id.match(/^\d+$/)) {
+      if (!id) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 
@@ -174,7 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversions/:id/download", isAuthenticated, async (req, res) => {
     try {
       const id = req.params.id;
-      if (!id || !id.match(/^\d+$/)) {
+      if (!id) {
         return res.status(400).json({ message: "Invalid conversion ID" });
       }
 

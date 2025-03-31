@@ -64,6 +64,7 @@ const AuthPage: React.FC = () => {
 
   const onLoginSubmit = async (values: LoginFormValues) => {
     try {
+      console.log('Attempting login with:', { email: values.email });
       setIsLoggingIn(true);
       const response = await fetch("/api/login", {
         method: "POST",
@@ -77,12 +78,15 @@ const AuthPage: React.FC = () => {
         credentials: "include",
       });
 
+      console.log('Login response status:', response.status);
       if (!response.ok) {
         const errorData = await response.json();
+        console.log('Login error data:', errorData);
         throw new Error(errorData.message || "Login failed");
       }
 
       const user = await response.json();
+      console.log('Login successful, user:', user);
       toast({
         title: "Login successful",
         description: `Welcome back, ${user.username}!`,

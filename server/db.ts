@@ -1,25 +1,29 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { users, conversions } from '@shared/schema';
+import mongoose from 'mongoose';
+import { User, Conversion } from './models';
 
-// Use the DATABASE_URL environment variable
-const DATABASE_URL = process.env.DATABASE_URL;
+// Use the MongoDB Atlas URL directly for now (will override any existing DATABASE_URL)
+const DATABASE_URL = process.env.MONGO_URL;
 
+console.log('Using MongoDB Atlas URL');
+
+// Make sure we have a valid URL
 if (!DATABASE_URL) {
-  console.error('DATABASE_URL environment variable is not set');
-  throw new Error('DATABASE_URL environment variable is not set');
+  console.error('MongoDB URL is not set');
+  throw new Error('MongoDB URL is not set');
 }
 
-// Create postgres client
-const queryClient = postgres(DATABASE_URL, { max: 1 });
+// Connect to MongoDB
+mongoose.connect(DATABASE_URL)
+  .then(() => {
+    console.log('Connected to MongoDB Atlas');
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  });
 
-// Create drizzle client
-export const db = drizzle(queryClient, { schema: { users, conversions } });
-
-console.log('Connected to PostgreSQL database');
-
-// Export the tables for convenience
-export const tables = {
-  users,
-  conversions
+// Export models for convenience
+export const models = {
+  User,
+  Conversion
 };

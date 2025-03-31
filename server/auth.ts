@@ -6,6 +6,8 @@ import { storage, UserType } from "./storage";
 import { z } from "zod";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { User as UserModel } from "./models/user";
+import { models } from "./db";
 
 // Promisify scrypt function
 const scryptAsync = promisify(scrypt);
@@ -20,10 +22,14 @@ async function hashPassword(password: string): Promise<string> {
 // Compare passwords function
 async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
   try {
+    console.log('Comparing passwords...');
     const [hashed, salt] = stored.split(".");
+    console.log('Stored password format:', { hashedLength: hashed.length, saltLength: salt.length });
     const hashedBuf = Buffer.from(hashed, "hex");
     const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-    return timingSafeEqual(hashedBuf, suppliedBuf);
+    const result = timingSafeEqual(hashedBuf, suppliedBuf);
+    console.log('Password comparison result:', result);
+    return result;
   } catch (error) {
     console.error('Error comparing passwords:', error);
     return false;
@@ -58,19 +64,30 @@ export function setupAuth(app: Express) {
       passwordField: 'password'
     }, async (email, password, done) => {
       try {
+        console.log('Login attempt for email:', email);
         const user = await storage.getUserByEmail(email);
         if (!user) {
+          console.log('User not found for email:', email);
           return done(null, false);
         }
         
-        // Verify password using the comparePasswords function
-        const isValid = await comparePasswords(password, user.password);
+        console.log('User found, verifying password');
+        // Get the full user document from MongoDB to use its comparePassword method
+        const mongoUser = await models.User.findById(user.id);
+        if (!mongoUser) {
+          console.log('MongoDB user not found');
+          return done(null, false);
+        }
+
+        const isValid = await mongoUser.comparePassword(password);
+        console.log('Password verification result:', isValid);
         if (!isValid) {
           return done(null, false);
         }
         
         return done(null, user);
       } catch (err) {
+        console.error('Login error:', err);
         return done(err);
       }
     }),
@@ -89,6 +106,7 @@ export function setupAuth(app: Express) {
   // Registration endpoint
   app.post("/api/register", async (req, res, next) => {
     try {
+      console.log('Registration attempt:', { email: req.body.email, username: req.body.username });
       // Validate registration data
       const registerSchema = z.object({
         email: z.string().email("Invalid email format"),
@@ -97,27 +115,29 @@ export function setupAuth(app: Express) {
       });
 
       const validatedData = registerSchema.parse(req.body);
+      console.log('Registration data validated');
 
       // Check if user with email already exists
       const existingUserByEmail = await storage.getUserByEmail(validatedData.email);
       if (existingUserByEmail) {
+        console.log('Email already exists:', validatedData.email);
         return res.status(400).json({ message: "Email already in use" });
       }
 
       // Check if user with username already exists
       const existingUserByUsername = await storage.getUserByUsername(validatedData.username);
       if (existingUserByUsername) {
+        console.log('Username already exists:', validatedData.username);
         return res.status(400).json({ message: "Username already taken" });
       }
 
-      // Hash password using our hashPassword function
-      const hashedPassword = await hashPassword(validatedData.password);
-
-      // Create user with hashed password
+      console.log('Creating new user...');
+      // Create user with hashed password using the User model's method
       const user = await storage.createUser({
         ...validatedData,
-        password: hashedPassword,
+        password: validatedData.password, // The storage layer will handle hashing
       });
+      console.log('User created successfully:', { id: user.id, email: user.email });
 
       // Create response object without password
       const userResponse = {

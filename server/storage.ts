@@ -1,14 +1,10 @@
-import { User, Conversion, InsertUser, InsertConversion, UpdateConversion } from "@shared/schema";
-import { db, tables } from "./db";
-import { eq } from "drizzle-orm";
 import session from "express-session";
 import memorystore from "memorystore";
-import connectPg from "connect-pg-simple";
-// Import mongoose related code only if needed for backwards compatibility
-// import mongoose from "mongoose";
-// import { User as MongoUser, Conversion as MongoConversion, IUser, IConversion } from "./models";
+import mongoose from "mongoose";
+import { User as MongoUser, Conversion as MongoConversion, IUser, IConversion } from "./models";
+import MongoStore from "connect-mongo";
+import { models } from "./db";
 
-const PostgresSessionStore = connectPg(session);
 const MemoryStore = memorystore(session);
 
 // Define types that are compatible with our storage interface
@@ -55,45 +51,42 @@ export class DatabaseStorage implements IStorage {
   public sessionStore: session.Store;
 
   constructor() {
-    // Initialize PostgreSQL session store
-    this.sessionStore = new PostgresSessionStore({
-      conObject: {
-        connectionString: process.env.DATABASE_URL,
-      },
-      tableName: 'session',
-      createTableIfMissing: true,
+    // Initialize MongoDB session store
+    this.sessionStore = MongoStore.create({
+      mongoUrl: 'mongodb+srv://Admin:UL0v86eYZcaywB78@cluster0.fnwso.mongodb.net/PdftoXML',
+      ttl: 14 * 24 * 60 * 60, // 14 days
     });
   }
 
-  // Convert Drizzle user to storage type
-  private _userToStorageType(user: User): UserType {
+  // Convert MongoDB user to storage type
+  private _userToStorageType(user: IUser): UserType {
     return {
-      id: user.id.toString(),
+      id: (user as any)._id.toString(),
       username: user.username,
       email: user.email,
       password: user.password,
     };
   }
 
-  // Convert Drizzle conversion to storage type
-  private _conversionToStorageType(conversion: Conversion): ConversionType {
+  // Convert MongoDB conversion to storage type
+  private _conversionToStorageType(conversion: IConversion): ConversionType {
     return {
-      id: conversion.id.toString(),
-      userId: conversion.userId.toString(),
+      id: (conversion as any)._id.toString(),
+      userId: (conversion as any).userId.toString(),
       originalFilename: conversion.originalFilename,
       originalSize: conversion.originalSize,
       convertedSize: conversion.convertedSize || null,
       status: conversion.status,
       xmlContent: conversion.xmlContent || null,
       createdAt: conversion.createdAt,
-      updatedAt: conversion.createdAt, // createdAt used as updatedAt for compatibility
+      updatedAt: conversion.updatedAt,
       metadata: conversion.metadata || null,
     };
   }
 
   async getUser(id: string): Promise<UserType | undefined> {
     try {
-      const [user] = await db.select().from(tables.users).where(eq(tables.users.id, parseInt(id)));
+      const user = await models.User.findById(id);
       return user ? this._userToStorageType(user) : undefined;
     } catch (error) {
       console.error('Error getting user by ID:', error);
@@ -103,7 +96,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<UserType | undefined> {
     try {
-      const [user] = await db.select().from(tables.users).where(eq(tables.users.username, username));
+      const user = await models.User.findOne({ username });
       return user ? this._userToStorageType(user) : undefined;
     } catch (error) {
       console.error('Error getting user by username:', error);
@@ -113,7 +106,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<UserType | undefined> {
     try {
-      const [user] = await db.select().from(tables.users).where(eq(tables.users.email, email));
+      const user = await models.User.findOne({ email });
       return user ? this._userToStorageType(user) : undefined;
     } catch (error) {
       console.error('Error getting user by email:', error);
@@ -123,13 +116,15 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUserType): Promise<UserType> {
     try {
-      const dbInsertUser: InsertUser = {
+      const hashedPassword = await models.User.hashPassword(insertUser.password);
+      
+      const user = new models.User({
         username: insertUser.username,
         email: insertUser.email,
-        password: insertUser.password,
-      };
+        password: hashedPassword,
+      });
       
-      const [user] = await db.insert(tables.users).values(dbInsertUser).returning();
+      await user.save();
       return this._userToStorageType(user);
     } catch (error) {
       console.error('Error creating user:', error);
@@ -139,14 +134,15 @@ export class DatabaseStorage implements IStorage {
 
   async createConversion(insertConversion: InsertConversionType): Promise<ConversionType> {
     try {
-      const dbInsertConversion: InsertConversion = {
-        userId: parseInt(insertConversion.userId),
+      const conversion = new models.Conversion({
+        userId: new mongoose.Types.ObjectId(insertConversion.userId),
         originalFilename: insertConversion.originalFilename,
         originalSize: insertConversion.originalSize,
         status: insertConversion.status || 'pending',
-      };
+        xmlContent: '',
+      });
       
-      const [conversion] = await db.insert(tables.conversions).values(dbInsertConversion).returning();
+      await conversion.save();
       return this._conversionToStorageType(conversion);
     } catch (error) {
       console.error('Error creating conversion:', error);
@@ -156,7 +152,7 @@ export class DatabaseStorage implements IStorage {
 
   async getConversion(id: string): Promise<ConversionType | undefined> {
     try {
-      const [conversion] = await db.select().from(tables.conversions).where(eq(tables.conversions.id, parseInt(id)));
+      const conversion = await models.Conversion.findById(id);
       return conversion ? this._conversionToStorageType(conversion) : undefined;
     } catch (error) {
       console.error('Error getting conversion by ID:', error);
@@ -166,18 +162,18 @@ export class DatabaseStorage implements IStorage {
 
   async updateConversion(id: string, data: UpdateConversionType): Promise<ConversionType | undefined> {
     try {
-      const dbUpdateConversion: UpdateConversion = {};
+      const updateData: any = {};
       
-      if (data.convertedSize !== undefined) dbUpdateConversion.convertedSize = data.convertedSize;
-      if (data.status !== undefined) dbUpdateConversion.status = data.status;
-      if (data.xmlContent !== undefined) dbUpdateConversion.xmlContent = data.xmlContent;
-      if (data.metadata !== undefined) dbUpdateConversion.metadata = data.metadata;
+      if (data.convertedSize !== undefined) updateData.convertedSize = data.convertedSize;
+      if (data.status !== undefined) updateData.status = data.status;
+      if (data.xmlContent !== undefined) updateData.xmlContent = data.xmlContent;
+      if (data.metadata !== undefined) updateData.metadata = data.metadata;
       
-      const [updatedConversion] = await db
-        .update(tables.conversions)
-        .set(dbUpdateConversion)
-        .where(eq(tables.conversions.id, parseInt(id)))
-        .returning();
+      const updatedConversion = await models.Conversion.findByIdAndUpdate(
+        id,
+        updateData,
+        { new: true } // Return the updated document
+      );
         
       return updatedConversion ? this._conversionToStorageType(updatedConversion) : undefined;
     } catch (error) {
@@ -188,11 +184,9 @@ export class DatabaseStorage implements IStorage {
 
   async getUserConversions(userId: string): Promise<ConversionType[]> {
     try {
-      const conversions = await db
-        .select()
-        .from(tables.conversions)
-        .where(eq(tables.conversions.userId, parseInt(userId)))
-        .orderBy(tables.conversions.createdAt);
+      const conversions = await models.Conversion.find({ 
+        userId: new mongoose.Types.ObjectId(userId) 
+      }).sort({ createdAt: -1 });
       
       return conversions.map(conversion => this._conversionToStorageType(conversion));
     } catch (error) {
@@ -203,12 +197,8 @@ export class DatabaseStorage implements IStorage {
 
   async deleteConversion(id: string): Promise<boolean> {
     try {
-      const result = await db
-        .delete(tables.conversions)
-        .where(eq(tables.conversions.id, parseInt(id)))
-        .returning();
-      
-      return result.length > 0;
+      const result = await models.Conversion.findByIdAndDelete(id);
+      return !!result;
     } catch (error) {
       console.error('Error deleting conversion:', error);
       return false;
