@@ -6,7 +6,6 @@ import { storage, UserType } from "./storage";
 import { z } from "zod";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { User as UserModel } from "./models/user";
 import { models } from "./db";
 
 // Promisify scrypt function
