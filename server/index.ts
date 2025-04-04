@@ -1,9 +1,27 @@
 import 'dotenv/config'; 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { serveStatic, log } from "./vite";
+import path from 'path';
+import { fileURLToPath } from 'url';
+import cors from 'cors';
+import mongoose from 'mongoose';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Enable CORS with specific options
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL || 'https://your-vercel-app.vercel.app'
+    : 'http://localhost:5173', // Vite's default dev server port
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -38,6 +56,17 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Check MongoDB connection
+  if (mongoose.connection.readyState === 0) {
+    try {
+      await mongoose.connect(process.env.MONGO_URL || '');
+      log('Connected to MongoDB');
+    } catch (error: unknown) {
+      log('MongoDB connection error:', error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -45,19 +74,23 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error(err);
   });
- if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+
+  if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, '../dist/public')));
+    
+    app.get('*', (req, res) => {
+      if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(__dirname, '../dist/public/index.html'));
+      }
+    });
   }
-  const port = 3000;
-  server.listen({
-    port,
-    host: "localhost",
-  }, () => {
-    log(`serving on port ${port}`);
+
+  const port = process.env.PORT || 3000;
+  server.listen(port, () => {
+    log(`Server is running on port ${port}`);
   });
-  
 })();
+
+export default app;
